@@ -1,0 +1,29 @@
+services:
+  web:
+    env_file: 
+      - config.env
+    build: .
+    ports: 
+      - ${ITKAPP_PORT}:${ITKAPP_PORT} 
+    command: sh -c 'goose up && /usr/bin/itkapp'
+    depends_on:
+      db:
+        condition: service_healthy
+  
+  db:
+    image: postgres:17
+    container_name: itkapp_db
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB} 
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "/usr/bin/pg_isready -U ${POSTGRES_USER}"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - itkapp_db_data:/var/lib/postgresql/data
+
+volumes:
+  itkapp_db_data:

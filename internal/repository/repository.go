@@ -7,7 +7,7 @@ import (
 	"github.com/glekoz/test_itk/internal/repository/db"
 	"github.com/glekoz/test_itk/internal/shared/myerrors"
 	"github.com/glekoz/test_itk/internal/shared/myvars"
-	"github.com/jackc/pgx"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -53,23 +53,23 @@ func (r *Repository) GetBalance(ctx context.Context, id string) (int, error) {
 	return int(amount), nil
 }
 
-func (r *Repository) Deposit(ctx context.Context, walletID, transactionID string, amount int, operationType myvars.OperationType) error {
+func (r *Repository) Deposit(ctx context.Context, walletID, transactionID string, amount int, operationType myvars.OperationType) (int, error) {
 	tx, err := r.p.Begin(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer tx.Rollback(ctx)
 	qtx := r.q.WithTx(tx)
 
-	rowsAffected, err := qtx.Deposit(ctx, db.DepositParams{
+	balance, err := qtx.Deposit(ctx, db.DepositParams{
 		ID:     walletID,
 		Amount: int32(amount),
 	})
 	if err != nil {
-		return err
-	}
-	if rowsAffected != 1 {
-		return myerrors.ErrNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, myerrors.ErrNotFound
+		}
+		return 0, err
 	}
 
 	err = qtx.CreateTransaction(ctx, db.CreateTransactionParams{
@@ -82,41 +82,44 @@ func (r *Repository) Deposit(ctx context.Context, walletID, transactionID string
 		var errp *pgconn.PgError
 		if errors.As(err, &errp) {
 			if errp.Code == UniqueViolationCode {
-				return myerrors.ErrAlreadyExists
+				return 0, myerrors.ErrAlreadyExists
 			}
 			if errp.Code == ForeignKeyViolationCode {
-				return myerrors.ErrNotFound
+				return 0, myerrors.ErrNotFound
 			}
 		}
-		return err
+		return 0, err
 	}
-
-	return tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return int(balance), nil
 }
 
-func (r *Repository) Withdraw(ctx context.Context, walletID, transactionID string, amount int, operationType myvars.OperationType) error {
+func (r *Repository) Withdraw(ctx context.Context, walletID, transactionID string, amount int, operationType myvars.OperationType) (int, error) {
 	tx, err := r.p.Begin(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer tx.Rollback(ctx)
 	qtx := r.q.WithTx(tx)
 
-	rowsAffected, err := qtx.Withdraw(ctx, db.WithdrawParams{
+	balance, err := qtx.Withdraw(ctx, db.WithdrawParams{
 		ID:     walletID,
 		Amount: int32(amount),
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, myerrors.ErrNotFound
+		}
 		var errp *pgconn.PgError
 		if errors.As(err, &errp) {
 			if errp.Code == CheckViolationCode {
-				return myerrors.ErrNegativeAmount
+				return 0, myerrors.ErrNegativeAmount
 			}
 		}
-		return err
-	}
-	if rowsAffected != 1 {
-		return myerrors.ErrNotFound
+		return 0, err
 	}
 
 	err = qtx.CreateTransaction(ctx, db.CreateTransactionParams{
@@ -129,16 +132,21 @@ func (r *Repository) Withdraw(ctx context.Context, walletID, transactionID strin
 		var errp *pgconn.PgError
 		if errors.As(err, &errp) {
 			if errp.Code == UniqueViolationCode {
-				return myerrors.ErrAlreadyExists
+				return 0, myerrors.ErrAlreadyExists
 			}
 			if errp.Code == ForeignKeyViolationCode {
-				return myerrors.ErrNotFound
+				return 0, myerrors.ErrNotFound
 			}
 		}
-		return err
+		return 0, err
 	}
 
-	return tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(balance), nil
 }
 
 func (r *Repository) Close() {

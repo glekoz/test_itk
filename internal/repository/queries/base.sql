@@ -7,15 +7,17 @@ SELECT amount
 FROM wallets
 WHERE id = $1;
 
--- name: Deposit :execrows
+-- name: Deposit :one
 UPDATE wallets
 SET amount = amount + $2, updated_at = CURRENT_TIMESTAMP
-WHERE id = $1;
+WHERE id = $1
+RETURNING amount;
 
--- name: Withdraw :execrows
+-- name: Withdraw :one
 UPDATE wallets
 SET amount = amount - $2, updated_at = CURRENT_TIMESTAMP
-WHERE id = $1;
+WHERE id = $1
+RETURNING amount;
 
 -- name: CreateTransaction :exec
 INSERT INTO transactions (id, wallet_id, amount, operation_type)

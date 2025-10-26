@@ -41,10 +41,11 @@ func (q *Queries) CreateWallet(ctx context.Context, id string) error {
 	return err
 }
 
-const deposit = `-- name: Deposit :execrows
+const deposit = `-- name: Deposit :one
 UPDATE wallets
 SET amount = amount + $2, updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
+RETURNING amount
 `
 
 type DepositParams struct {
@@ -52,12 +53,11 @@ type DepositParams struct {
 	Amount int32
 }
 
-func (q *Queries) Deposit(ctx context.Context, arg DepositParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deposit, arg.ID, arg.Amount)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+func (q *Queries) Deposit(ctx context.Context, arg DepositParams) (int32, error) {
+	row := q.db.QueryRow(ctx, deposit, arg.ID, arg.Amount)
+	var amount int32
+	err := row.Scan(&amount)
+	return amount, err
 }
 
 const getBalance = `-- name: GetBalance :one
@@ -73,10 +73,11 @@ func (q *Queries) GetBalance(ctx context.Context, id string) (int32, error) {
 	return amount, err
 }
 
-const withdraw = `-- name: Withdraw :execrows
+const withdraw = `-- name: Withdraw :one
 UPDATE wallets
 SET amount = amount - $2, updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
+RETURNING amount
 `
 
 type WithdrawParams struct {
@@ -84,10 +85,9 @@ type WithdrawParams struct {
 	Amount int32
 }
 
-func (q *Queries) Withdraw(ctx context.Context, arg WithdrawParams) (int64, error) {
-	result, err := q.db.Exec(ctx, withdraw, arg.ID, arg.Amount)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+func (q *Queries) Withdraw(ctx context.Context, arg WithdrawParams) (int32, error) {
+	row := q.db.QueryRow(ctx, withdraw, arg.ID, arg.Amount)
+	var amount int32
+	err := row.Scan(&amount)
+	return amount, err
 }
