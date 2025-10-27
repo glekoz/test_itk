@@ -56,7 +56,14 @@ func (a *Service) GetBalance(ctx context.Context, walletID string) (int, error) 
 	if ok {
 		return balance, nil
 	}
-	return a.repo.GetBalance(ctx, walletID)
+	balance, err := a.repo.GetBalance(ctx, walletID)
+	if err != nil {
+		return 0, err
+	}
+	if err := a.cache.Add(walletID, balance); err != nil {
+		a.errorLog.Printf("adding to cache failed")
+	}
+	return balance, nil
 }
 
 func (a *Service) Deposit(ctx context.Context, walletID string, amount int) error {
@@ -70,6 +77,7 @@ func (a *Service) Deposit(ctx context.Context, walletID string, amount int) erro
 		return err
 	}
 	if err := a.cache.Add(walletID, balance); err != nil {
+		a.errorLog.Printf("adding to cache failed")
 		a.cache.Delete(walletID)
 	}
 
